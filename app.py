@@ -6,6 +6,8 @@ from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
 from dotenv import load_dotenv
+from langchain_core.chat_history import InMemoryChatMessageHistory
+from langchain_core.runnables.history import RunnableWithMessageHistory
 from src.prompt import *
 import os
 
@@ -59,6 +61,28 @@ question_answer_chain=create_stuff_documents_chain(llm,prompt)
 rag_chain=create_retrieval_chain(retriever,question_answer_chain)
 
 
+#memory
+
+
+# In-memory store (per user session)
+store = {}
+
+def get_session_history(session_id: str):
+    if session_id not in store:
+        store[session_id] = InMemoryChatMessageHistory()
+    return store[session_id]
+
+
+
+rag_chain_with_memory = RunnableWithMessageHistory(
+    rag_chain,
+    get_session_history,
+    input_messages_key="input",
+    history_messages_key="chat_history",
+    output_messages_key="answer"
+)
+
+
 
 
 @app.route("/")
@@ -72,7 +96,7 @@ def chat():
     msg=request.form["msg"]
     input=msg
     print(input)
-    response=rag_chain.invoke({"input":msg})
+    response=rag_chain_with_memory.invoke({"input":msg},config={"configurable": {"session_id": "default"}})
     print("Response : ",response['answer'])
     return str(response['answer'])
 
